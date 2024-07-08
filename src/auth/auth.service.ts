@@ -49,7 +49,7 @@ export class AuthService {
         },
         {
           secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-          expiresIn: parseInt(accessTokenExpiration, 10), // in seconds
+          expiresIn: parseInt(accessTokenExpiration, 10), // 15m
         }
       ),
       this.jwtService.signAsync(
@@ -59,7 +59,7 @@ export class AuthService {
         },
         {
           secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: parseInt(refreshTokenExpiration, 10), // in seconds
+          expiresIn: parseInt(refreshTokenExpiration, 10), // 7d
         }
       ),
     ]);
@@ -120,9 +120,7 @@ export class AuthService {
   }
 
   async refreshTokens(userId: number, rt: string) {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
+    console.log('🚀 ~ AuthService ~ access_token:', rt);
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -130,24 +128,27 @@ export class AuthService {
       },
     });
 
-    if (!user) {
+    if (!user || !user.hashedRt) {
       throw new ForbiddenException('Access Denied');
     }
 
-    const rtHashed = user.hashedRt;
-    if (!rtHashed) {
-      throw new ForbiddenException('Access Denied');
-    }
-
-    const rtMatches = await bcrypt.compare(rt, rtHashed);
+    const rtMatches = await bcrypt.compare(rt, user.hashedRt);
     if (!rtMatches) {
       throw new ForbiddenException('Access Denied');
     }
 
-    const tokens = await this.getTokens(user.id, user.email);
+    const accessTokenExpiration = this.configService.get<string>(
+      'JWT_ACCESS_EXPIRATION_TIME'
+    );
+    const newAccessToken = await this.jwtService.signAsync(
+      { sub: userId, email: user.email },
+      {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        expiresIn: parseInt(accessTokenExpiration, 10), // 15m
+      }
+    );
 
-    await this.updateRtHash(user.id, tokens.refresh_token);
-    return tokens;
+    return { access_token: newAccessToken };
   }
 
   async validateToken(token: string) {
