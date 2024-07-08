@@ -44,9 +44,6 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   refreshTokens(@Req() req: Request) {
-    console.count();
-    console.log(req.user['refreshToken']);
-
     const user = req.user;
     return this.authService.refreshTokens(user['sub'], user['refreshToken']);
   }
